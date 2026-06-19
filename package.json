@@ -1,12 +1,8 @@
-{
-  "name": "quoteflow",
-  "version": "1.0.0",
-  "private": true,
-  "description": "QuoteFlow - OAリース見積管理アプリ",
-  "scripts": {
-    "dev": "node scripts/serve.js",
-    "start": "node scripts/serve.js",
-    "check": "node --check src/app.js && node --check scripts/serve.js && node scripts/check-files.js"
-  },
-  "devDependencies": {}
-}
+node_modules/
+.DS_Store
+Thumbs.db
+.env
+*.log
+output/
+dist/
+coverage/
