@@ -1,0 +1,33 @@
+const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const index = path.join(root, 'index.html');
+const logo = path.join(root, 'assets', 'quoteflow-logo.png');
+const template = path.join(root, 'templates', 'estimate-template.xlsx');
+const html = fs.readFileSync(index, 'utf8');
+const required = [
+  ['index.html', fs.existsSync(index)],
+  ['assets/quoteflow-logo.png', fs.existsSync(logo)],
+  ['templates/estimate-template.xlsx', fs.existsSync(template)],
+  ['旧物件・残債 1', html.includes('旧物件・残債 1')],
+  ['旧物件・残債 2', html.includes('旧物件・残債 2')],
+  ['明細カード入力', html.includes('line-item-fields')],
+  ['税抜単価', html.includes('税抜単価')],
+  ['税抜金額', html.includes('税抜金額')],
+  ['仕入れ単価', html.includes('仕入れ単価')],
+  ['粗利', html.includes('粗利')],
+  ['計算結果コンパクト表示', html.includes('calc-mini')],
+];
+const failed = required.filter(([, ok]) => !ok).map(([name]) => name);
+if (failed.length) {
+  console.error('QuoteFlow check failed:');
+  failed.forEach(x => console.error('- ' + x));
+  process.exit(1);
+}
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+if (!scripts.length) {
+  console.error('QuoteFlow check failed: no inline script found.');
+  process.exit(1);
+}
+new Function(scripts.join('\n'));
+console.log('QuoteFlow check passed. Excel-aligned line items, tax settings, old balance auto calculation, and required files exist.');

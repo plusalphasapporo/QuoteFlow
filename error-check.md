@@ -1,34 +1,97 @@
-name: Deploy QuoteFlow to GitHub Pages
+# QuoteFlow
 
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
+OA機器リース見積を管理するための、GitHub Pages対応の単体HTMLアプリです。
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+## 開き方
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+GitHub Pagesで公開したURLを開いてください。
 
-jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+ローカル確認する場合は、リポジトリ直下の `index.html` をブラウザで開きます。
+
+## 主な機能
+
+- 見積管理ダッシュボード
+- 新規見積作成
+- 明細入力
+  - 品名・型番
+  - 数量
+  - 売上単価
+  - 売上金額
+  - 仕入単価
+  - 仕入金額
+  - 粗利
+- 新規作成画面内で旧物件・残債を2件登録
+- 利益率の自動計算
+- 見積検索
+- 見積台帳
+- 料率マスタ
+- 設定画面
+- 印刷プレビュー
+
+## GitHub Pages設定
+
+GitHubにアップロード後、以下を設定してください。
+
+```text
+Settings → Pages → Deploy from a branch
+Branch: main
+Folder: /root
+```
+
+GitHub上で `index.html` をクリックするのではなく、GitHub PagesのURLで開いてください。
+
+## チェック
+
+```bash
+npm run check
+```
+
+
+## 今回のレイアウト修正
+- 計算結果を一番下へ移動
+- 見積情報を画面全体に広げて見やすく調整
+- 旧物件・残債 1 / 2 と明細入力はそのまま維持
+
+
+## 今回の修正
+- 新規作成、登録、削除、入力クリアに確認ダイアログを追加
+- 料率マスタを追加・編集・削除できるように変更
+- 同じ期間でも、リース会社・条件名が違う料率を複数登録可能
+- 新規作成画面で適用料率を選択可能
+
+
+## 最新修正
+- 明細項目をExcelに合わせて No. / 物件名・型番 / 数量 / 税抜単価 / 税抜金額 / 仕入れ単価 に統一
+- 設定画面で消費税率と端数処理を編集可能
+- 旧物件・残債の税込残債を 月額税込 × 残回数 で自動計算
+
+
+## 明細単位欄
+明細に「単位」欄を追加しました。数量の横に、個・式・台・セットなどを入力できます。
+
+
+## ロゴ・印刷プレビュー修正
+- 左上ロゴは画像読み込みに依存しないインラインSVGで表示します。
+- 印刷プレビューは見積書PDFの配置に合わせ、宛先・Plus Alpha情報・見積番号・件名・明細・小計/消費税/合計・備考枠の帳票レイアウトに変更しました。
+
+
+## 今回の修正
+- TOPボタンがクリックできるようにイベント処理を修正
+- 明細の下に見積備考欄を追加
+- 印刷プレビューの備考枠に入力した備考を反映
+
+
+## 今回の修正
+- 顧客情報に郵便番号、住所1、住所2、担当者を追加
+- 設定画面で会社ロゴと会社印鑑画像を登録可能に変更
+- 印刷プレビューに会社ロゴ・印鑑・顧客住所を表示
+- 印刷プレビューの単価・合計に¥表記を追加
+- 明細表の「価格」を「合計」に変更
+
+
+## 会社情報マスタ修正
+- 顧客住所例を架空の札幌市○○区○○1条1丁目1-1へ変更
+- サンプルでも特定社名を表示しないよう修正
+- マスタ画面で会社情報を登録可能
+- 見積情報に自社担当者欄を追加
+- 印刷プレビューに会社情報・担当者を表示

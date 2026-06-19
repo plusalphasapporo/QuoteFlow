@@ -1,0 +1,10 @@
+{
+  "name": "quoteflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuoteFlow - OAリース見積管理アプリ",
+  "scripts": {
+    "dev": "node scripts/serve.js",
+    "check": "node scripts/check-files.js"
+  }
+}
