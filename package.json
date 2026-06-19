@@ -1,8 +1,10 @@
-node_modules/
-.DS_Store
-Thumbs.db
-.env
-*.log
-output/
-dist/
-coverage/
+{
+  "name": "quoteflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuoteFlow static estimate management app for GitHub Pages.",
+  "scripts": {
+    "dev": "node -e \"require('http').createServer((q,s)=>{const fs=require('fs'),p=require('path');let f=q.url==='/'?'index.html':q.url.slice(1);if(f.includes('..')){s.writeHead(403);return s.end('Forbidden')}let b=fs.existsSync(f)?fs.readFileSync(f):null;if(!b){s.writeHead(404);return s.end('Not found')}s.end(b)}).listen(8080,()=>console.log('http://localhost:8080'))\"",
+    "check": "node scripts/check-files.js"
+  }
+}
