@@ -16,6 +16,9 @@
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0}
     .kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}.kpi .label{font-size:12px;color:var(--muted);font-weight:800}.kpi .value{font-size:30px;font-weight:900;margin-top:6px}
     .section{margin-top:18px}.item{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px}.item h3{margin:0 0 5px;font-size:14px}.item p{margin:4px 0;font-size:13px;color:#475569}
+    .clickable{cursor:pointer}.clickable:hover{background:#f8fbff}.searchbar{display:flex;gap:8px;margin:14px 0}.searchbar input{flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font:inherit}
+    .message{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:#fafcff}.message.customer{background:#eff6ff}.message.support{background:#fff7ed}.message.internal{background:#f5f3ff}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .app-shell{display:grid;grid-template-columns:240px minmax(0,1fr);gap:22px;align-items:start}
     .sidebar{position:sticky;top:92px;background:var(--navy);color:#fff;border-radius:18px;padding:14px;min-height:calc(100vh - 116px);box-shadow:0 12px 30px rgba(7,22,47,.16)}
     .sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#91a4c7;padding:8px 10px 10px}
@@ -139,14 +142,115 @@
     currentSection=section;
     renderNavigation();
     if(section==='home'){ await renderHome(); return; }
+    if(section==='support'){ await renderSupportPage(); return; }
+    if(section==='customers'){ await renderCustomersPage(); return; }
+    if(section==='search'){ await renderSearchPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
-      const h=await rpc('customer_portal_home');
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
       return;
     }
-    const names={customers:'顧客',quotes:'見積',orders:'受注',contracts:'契約',procurement:'発注',deliveries:'納品',support:'対応',search:'検索',settings:'管理',assets:'機器'};
+    if(section==='assets' && bootData?.context?.role==='customer_user'){
+      const h=await rpc('customer_portal_home');
+      $('#home').innerHTML='<section class="card section"><h2>登録機器</h2>'+renderAssets(h.assets||[])+'</section>';
+      return;
+    }
+    if(section==='contracts' && bootData?.context?.role==='customer_user'){
+      const h=await rpc('customer_portal_home');
+      $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
+      return;
+    }
+    const names={quotes:'見積',orders:'受注',contracts:'契約',procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
+  }
+
+  function renderAssets(rows){
+    if(!rows.length) return '<p class="muted">登録機器はありません。</p>';
+    return '<table><thead><tr><th>管理番号</th><th>型番</th><th>シリアル</th><th>状態</th></tr></thead><tbody>'+
+      rows.map(a=>'<tr><td>'+esc(a.asset_number||'—')+'</td><td>'+esc(a.model_name||'—')+'</td><td>'+esc(a.serial_number||'—')+'</td><td>'+esc(a.status||'—')+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  function renderContracts(rows){
+    if(!rows.length) return '<p class="muted">契約はありません。</p>';
+    return '<table><thead><tr><th>契約番号</th><th>状態</th><th>開始</th><th>終了</th></tr></thead><tbody>'+
+      rows.map(x=>'<tr><td>'+esc(x.contract_number||'—')+'</td><td>'+esc(x.status||'—')+'</td><td>'+esc(x.start_date||'—')+'</td><td>'+esc(x.end_date||'—')+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  async function renderSupportPage(){
+    const role=bootData?.context?.role;
+    if(role==='customer_user'){ await navigateSection('home'); return; }
+    const h=await rpc('support_home');
+    const rows=h.recent_tickets||[];
+    $('#home').innerHTML=
+      kpis([['対応中',h.kpis?.open_tickets],['本日新規',h.kpis?.created_today],['本日解決',h.kpis?.closed_today],['緊急',h.kpis?.urgent_open]])+
+      '<section class="card section"><div class="row between"><h2>対応一覧</h2><span class="muted">'+rows.length+'件</span></div>'+
+      (rows.length?'<table><thead><tr><th>番号</th><th>顧客</th><th>件名</th><th>状態</th><th>優先度</th></tr></thead><tbody>'+
+        rows.map(t=>'<tr class="clickable ticket-row" data-id="'+esc(t.id)+'"><td>'+esc(t.ticket_number||'—')+'</td><td>'+esc(t.customer_name||'')+'</td><td>'+esc(t.subject||'')+'</td><td>'+esc(t.status||'')+'</td><td>'+esc(t.priority||'')+'</td></tr>').join('')+
+        '</tbody></table>':'<p class="muted">対応案件はありません。</p>')+'</section>';
+    document.querySelectorAll('.ticket-row').forEach(row=>row.onclick=()=>openTicket(row.dataset.id));
+  }
+
+  async function openTicket(id){
+    const d=await rpc('support_ticket_workspace',{p_ticket_id:id});
+    const t=d.ticket||{}, role=bootData?.context?.role;
+    const messages=(d.messages||[]).map(m=>'<div class="message '+esc(m.visibility||'customer')+'"><div class="muted" style="font-size:11px">'+esc(m.visibility||'customer')+' / '+esc(new Date(m.created_at).toLocaleString('ja-JP'))+'</div><div>'+esc(m.body||'')+'</div></div>').join('');
+    const handoffs=(d.handoffs||[]).map(h=>'<div class="item"><h3>'+esc(h.state)+'</h3><p>理由: '+esc(h.reason||'')+'</p><p>次: '+esc(h.next_action||'')+'</p></div>').join('');
+    $('#home').innerHTML=
+      '<div class="row between"><div><button id="backSupport" class="ghost">← 対応一覧</button><h2>'+esc(t.ticket_number||'問い合わせ')+' '+esc(t.subject||'')+'</h2></div><span class="pill">'+esc(t.status||'')+'</span></div>'+
+      '<section class="card section"><h2>顧客・案件情報</h2><p><b>'+esc(d.customer?.name||'')+'</b></p><p class="muted">'+esc(t.description||'')+'</p></section>'+
+      '<section class="card section"><h2>メッセージ</h2>'+(messages||'<p class="muted">メッセージはありません。</p>')+
+      '<div class="field"><label>返信</label><textarea id="replyBody" rows="4"></textarea></div>'+
+      '<div class="field"><label>公開範囲</label><select id="replyVisibility" style="padding:10px;border:1px solid var(--line);border-radius:10px"><option value="customer">顧客公開</option><option value="support">サポート内</option>'+(role==='internal_admin'||role==='internal_staff'?'<option value="internal">自社内</option>':'')+'</select></div>'+
+      '<div class="actions"><button id="sendReply" class="primary">返信を記録</button>'+(t.status==='closed'?'<button id="reopenTicket" class="ghost">再開する</button>':'<button id="closeTicket" class="green">解決・完了</button>')+(role==='support_staff'?'<button id="handoffBtn" class="orange">自社へ引き継ぐ</button>':'')+'</div></section>'+
+      (role==='support_staff'?'<section id="handoffBox" class="card section hidden"><h2>自社へ引き継ぐ</h2><div class="field"><label>理由</label><textarea id="handoffReason" rows="3"></textarea></div><div class="field"><label>次に行うこと</label><textarea id="handoffNext" rows="3"></textarea></div><button id="submitHandoff" class="orange">引き継ぎを登録</button></section>':'')+
+      '<section class="card section"><h2>引き継ぎ履歴</h2>'+(handoffs||'<p class="muted">引き継ぎ履歴はありません。</p>')+'</section>';
+    $('#backSupport').onclick=renderSupportPage;
+    $('#sendReply').onclick=async()=>{const body=$('#replyBody').value.trim();if(!body)return;try{await rpc('post_ticket_message',{p_ticket_id:id,p_visibility:$('#replyVisibility').value,p_body:body});toast('返信を記録しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
+    const close=$('#closeTicket'); if(close) close.onclick=async()=>{try{await rpc('close_support_ticket',{p_ticket_id:id});toast('完了しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
+    const reopen=$('#reopenTicket'); if(reopen) reopen.onclick=async()=>{try{await rpc('reopen_support_ticket',{p_ticket_id:id});toast('再開しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
+    const hb=$('#handoffBtn'); if(hb) hb.onclick=()=>$('#handoffBox').classList.toggle('hidden');
+    const sh=$('#submitHandoff'); if(sh) sh.onclick=async()=>{try{await rpc('handoff_ticket_to_internal',{p_ticket_id:id,p_reason:$('#handoffReason').value.trim(),p_next_action:$('#handoffNext').value.trim()});toast('引き継ぎました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
+  }
+
+  async function renderSearchPage(){
+    $('#home').innerHTML='<section class="card section"><h2>横断検索</h2><div class="searchbar"><input id="searchInput" placeholder="顧客名・電話・機器番号・契約番号・問い合わせ番号など"><button id="searchBtn" class="primary">検索</button></div><div id="searchResults"></div></section>';
+    $('#searchBtn').onclick=runGlobalSearch;
+    $('#searchInput').onkeydown=e=>{if(e.key==='Enter')runGlobalSearch();};
+  }
+
+  async function runGlobalSearch(){
+    const q=$('#searchInput').value.trim(), out=$('#searchResults');
+    if(!q){out.innerHTML='<p class="muted">検索語を入力してください。</p>';return;}
+    out.innerHTML='<p class="muted">検索中...</p>';
+    try{
+      const rows=await rpc('search_global',{p_query:q,p_limit:30});
+      out.innerHTML=rows.length?'<div class="list">'+rows.map(x=>'<div class="item clickable search-result" data-type="'+esc(x.entity_type)+'" data-id="'+esc(x.entity_id)+'" data-customer="'+esc(x.customer_id||'')+'"><h3>'+esc(x.label||'')+'</h3><p>'+esc(x.entity_type)+' / '+esc(x.reference||'')+'</p></div>').join('')+'</div>':'<p class="muted">該当なし</p>';
+      document.querySelectorAll('.search-result').forEach(el=>el.onclick=()=>openSearchResult(el.dataset.type,el.dataset.id,el.dataset.customer));
+    }catch(e){out.innerHTML='<div class="notice error">'+esc(e.message||String(e))+'</div>';}
+  }
+
+  async function openSearchResult(type,id,customerId){
+    if(type==='ticket'){await openTicket(id);return;}
+    if((bootData?.context?.role==='internal_admin'||bootData?.context?.role==='internal_staff') && customerId){await openCustomer(customerId);return;}
+    toast('この項目の詳細画面は移行中です');
+  }
+
+  async function renderCustomersPage(){
+    const rows=await rpc('search_global',{p_query:'',p_limit:50});
+    const customers=rows.filter(x=>x.entity_type==='customer');
+    $('#home').innerHTML='<section class="card section"><div class="row between"><h2>顧客</h2><span class="muted">'+customers.length+'件</span></div>'+
+      (customers.length?'<div class="list">'+customers.map(x=>'<div class="item clickable customer-row" data-id="'+esc(x.entity_id)+'"><h3>'+esc(x.label||'')+'</h3><p>'+esc(x.reference||'')+'</p></div>').join('')+'</div>':'<p class="muted">表示できる顧客はありません。</p>')+'</section>';
+    document.querySelectorAll('.customer-row').forEach(el=>el.onclick=()=>openCustomer(el.dataset.id));
+  }
+
+  async function openCustomer(id){
+    const role=bootData?.context?.role;
+    if(role!=='internal_admin'&&role!=='internal_staff'){toast('顧客詳細は自社ロールのみです');return;}
+    const d=await rpc('internal_customer_detail',{p_customer_id:id});
+    $('#home').innerHTML='<button id="backCustomers" class="ghost">← 顧客一覧</button><section class="card section"><h2>'+esc(d.name||'顧客')+'</h2><p>顧客コード: '+esc(d.customer_code||'—')+'</p><p>電話: '+esc(d.phone||'—')+'</p><p>状態: '+esc(d.status||'—')+'</p><p>手動ホールド: '+(d.manual_hold?'ON':'OFF')+'</p>'+(d.internal_note?'<div class="notice">'+esc(d.internal_note)+'</div>':'')+'</section>';
+    $('#backCustomers').onclick=renderCustomersPage;
   }
 
   function bindCustomerTicketForm(){
