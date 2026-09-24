@@ -147,6 +147,7 @@
     if(section==='search'){ await renderSearchPage(); return; }
     if(section==='quotes'){ await renderQuotesPage(); return; }
     if(section==='orders'){ await renderOrdersPage(); return; }
+    if(section==='contracts'){ await renderContractsPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
@@ -162,7 +163,7 @@
       $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
       return;
     }
-    const names={contracts:'契約',procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
+    const names={procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
   }
 
@@ -298,6 +299,44 @@
       (quote?'<section class="card section"><h2>元見積</h2><p>見積番号: '+esc(quote.quote_number||'—')+'</p><p>状態: '+esc(quote.status||'—')+'</p><p>見積合計: '+esc(yen(quote.total_amount))+'</p><button id="openSourceQuote" class="ghost">元見積を開く</button></section>':'');
     $('#backOrders').onclick=renderOrdersPage;
     const qbtn=$('#openSourceQuote'); if(qbtn) qbtn.onclick=()=>openQuote(quote.id);
+  }
+
+
+  async function renderContractsPage(){
+    const role=bootData?.context?.role;
+    if(role==='customer_user'){
+      const h=await rpc('customer_portal_home');
+      $('#home').innerHTML='<section class="card section"><div class="row between"><h2>契約</h2><span class="pill">'+(h.contracts||[]).length+'件</span></div>'+renderContracts(h.contracts||[])+'</section>';
+      return;
+    }
+    const rows=await rpc('search_global',{p_query:'',p_limit:50});
+    const contracts=rows.filter(x=>x.entity_type==='contract');
+    $('#home').innerHTML=
+      '<section class="card section"><div class="row between"><div><h2>契約</h2><p class="muted">Supabaseに登録されている契約を表示します。</p></div><span class="pill">'+contracts.length+'件</span></div>'+
+      (contracts.length
+        ? '<div class="list">'+contracts.map(x=>'<div class="item clickable contract-row" data-id="'+esc(x.entity_id)+'"><div class="row between"><div><h3>'+esc(x.reference||x.label||'契約')+'</h3><p>'+esc(x.label||'')+'</p></div><span class="pill">詳細</span></div></div>').join('')+'</div>'
+        : '<p class="muted">契約はまだ登録されていません。</p>')+
+      '</section>';
+    document.querySelectorAll('.contract-row').forEach(el=>el.onclick=()=>openContract(el.dataset.id));
+  }
+
+  async function openContract(id){
+    const d=await rpc('internal_contract_detail',{p_contract_id:id});
+    const co=d.contract||{}, customer=d.customer||{}, assets=d.assets||[];
+    $('#home').innerHTML=
+      '<button id="backContracts" class="ghost">← 契約一覧</button>'+
+      '<div class="grid">'+
+        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(co.status||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">開始日</div><div class="value" style="font-size:18px">'+esc(co.start_date||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">終了日</div><div class="value" style="font-size:18px">'+esc(co.end_date||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">登録機器</div><div class="value">'+esc(assets.length)+'</div></div>'+
+      '</div>'+
+      '<section class="card section"><div class="row between"><div><h2>'+esc(co.contract_number||'契約')+'</h2><p class="muted">'+esc(customer.name||'')+' / '+esc(customer.customer_code||'')+'</p></div>'+(customer.manual_hold?'<span class="pill bad">手動ホールド中</span>':'<span class="pill good">通常</span>')+'</div>'+
+      '<p>電話: '+esc(customer.phone||'—')+'</p>'+
+      (co.internal_note?'<div class="notice">'+esc(co.internal_note)+'</div>':'')+
+      '</section>'+
+      '<section class="card section"><h2>関連機器</h2>'+renderAssets(assets)+'</section>';
+    $('#backContracts').onclick=renderContractsPage;
   }
 
   async function renderSearchPage(){
