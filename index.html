@@ -149,6 +149,7 @@
     if(section==='orders'){ await renderOrdersPage(); return; }
     if(section==='contracts'){ await renderContractsPage(); return; }
     if(section==='procurement'){ await renderPurchaseOrdersPage(); return; }
+    if(section==='deliveries'){ await renderDeliveriesPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
@@ -164,7 +165,7 @@
       $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
       return;
     }
-    const names={deliveries:'納品',settings:'管理',assets:'機器'};
+    const names={settings:'管理',assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
   }
 
@@ -374,6 +375,39 @@
         : '<p class="muted">明細はありません。</p>')+
       '</section>';
     $('#backPurchaseOrders').onclick=renderPurchaseOrdersPage;
+  }
+
+
+  async function renderDeliveriesPage(){
+    const rows=await rpc('internal_deliveries');
+    $('#home').innerHTML=
+      '<section class="card section"><div class="row between"><div><h2>納品</h2><p class="muted">Supabaseに登録されている納品予定・実績を表示します。</p></div><span class="pill">'+rows.length+'件</span></div>'+
+      (rows.length
+        ? '<div class="list">'+rows.map(d=>'<div class="item clickable delivery-row" data-id="'+esc(d.id)+'"><div class="row between"><div><h3>'+esc(d.delivery_number||'納品')+'</h3><p>'+esc(d.customer_name||'')+' / '+esc(d.order_number||'')+'</p><p class="muted">予定: '+esc(d.scheduled_at?new Date(d.scheduled_at).toLocaleString('ja-JP'):'—')+'</p></div><div><span class="pill">'+esc(d.status||'')+'</span></div></div></div>').join('')+'</div>'
+        : '<p class="muted">納品データはまだありません。</p>')+
+      '</section>';
+    document.querySelectorAll('.delivery-row').forEach(el=>el.onclick=()=>openDelivery(el.dataset.id));
+  }
+
+  async function openDelivery(id){
+    const d=await rpc('internal_delivery_detail',{p_delivery_id:id});
+    const de=d.delivery||{}, customer=d.customer||{}, order=d.order||null;
+    $('#home').innerHTML=
+      '<button id="backDeliveries" class="ghost">← 納品一覧</button>'+
+      '<div class="grid">'+
+        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(de.status||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">納品予定</div><div class="value" style="font-size:18px">'+esc(de.scheduled_at?new Date(de.scheduled_at).toLocaleString('ja-JP'):'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">納品完了</div><div class="value" style="font-size:18px">'+esc(de.delivered_at?new Date(de.delivered_at).toLocaleString('ja-JP'):'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">元受注</div><div class="value" style="font-size:18px">'+esc(order?.order_number||'—')+'</div></div>'+
+      '</div>'+
+      '<section class="card section"><div class="row between"><div><h2>'+esc(de.delivery_number||'納品')+'</h2><p class="muted">'+esc(customer.name||'')+' / '+esc(customer.customer_code||'')+'</p></div>'+(customer.manual_hold?'<span class="pill bad">手動ホールド中</span>':'<span class="pill good">通常</span>')+'</div>'+
+      '<p>電話: '+esc(customer.phone||'—')+'</p>'+
+      (de.notes?'<div class="notice">'+esc(de.notes)+'</div>':'')+
+      (de.internal_note?'<div class="notice">'+esc(de.internal_note)+'</div>':'')+
+      '</section>'+
+      (order?'<section class="card section"><h2>元受注</h2><p>受注番号: '+esc(order.order_number||'—')+'</p><p>状態: '+esc(order.status||'—')+'</p><p>受注金額: '+esc(yen(order.total_amount))+'</p><button id="openDeliveryOrder" class="ghost">元受注を開く</button></section>':'');
+    $('#backDeliveries').onclick=renderDeliveriesPage;
+    const ob=$('#openDeliveryOrder'); if(ob) ob.onclick=()=>openOrder(order.id);
   }
 
   async function renderSearchPage(){
