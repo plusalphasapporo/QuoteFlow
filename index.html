@@ -150,6 +150,7 @@
     if(section==='contracts'){ await renderContractsPage(); return; }
     if(section==='procurement'){ await renderPurchaseOrdersPage(); return; }
     if(section==='deliveries'){ await renderDeliveriesPage(); return; }
+    if(section==='settings'){ await renderAdminPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
@@ -165,7 +166,7 @@
       $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
       return;
     }
-    const names={settings:'管理',assets:'機器'};
+    const names={assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
   }
 
@@ -408,6 +409,47 @@
       (order?'<section class="card section"><h2>元受注</h2><p>受注番号: '+esc(order.order_number||'—')+'</p><p>状態: '+esc(order.status||'—')+'</p><p>受注金額: '+esc(yen(order.total_amount))+'</p><button id="openDeliveryOrder" class="ghost">元受注を開く</button></section>':'');
     $('#backDeliveries').onclick=renderDeliveriesPage;
     const ob=$('#openDeliveryOrder'); if(ob) ob.onclick=()=>openOrder(order.id);
+  }
+
+
+  async function renderAdminPage(){
+    const role=bootData?.context?.role;
+    if(role!=='internal_admin'){
+      $('#home').innerHTML='<section class="card section"><h2>管理</h2><div class="notice error">この画面は自社管理者のみ利用できます。</div></section>';
+      return;
+    }
+
+    let health=null;
+    try{ health=await rpc('app_health'); }catch(e){ health={ok:false,error:e.message||String(e)}; }
+
+    const ints=bootData?.integrations||{};
+    const labels={callconnect:'CallConnect',ai:'AIアシスタント',teamviewer:'TeamViewer'};
+    const stateText={connected:'接続済み',degraded:'一部障害',manual:'手動運用',disabled:'未接続'};
+    const stateClass=s=>s==='connected'?'good':(s==='degraded'?'bad':'');
+
+    $('#home').innerHTML=
+      '<div class="grid">'+
+        '<div class="kpi"><div class="label">DBヘルス</div><div class="value" style="font-size:22px">'+(health?.ok?'正常':'要確認')+'</div></div>'+
+        '<div class="kpi"><div class="label">ロール</div><div class="value" style="font-size:18px">'+esc(roleLabel(role))+'</div></div>'+
+        '<div class="kpi"><div class="label">会社</div><div class="value" style="font-size:18px">'+esc(bootData?.context?.company_name||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">認証</div><div class="value" style="font-size:18px">MFA必須</div></div>'+
+      '</div>'+
+      '<section class="card section"><div class="row between"><div><h2>外部連携</h2><p class="muted">実際の接続状態のみ表示します。ここから接続済みへ変更はしません。</p></div></div>'+
+        Object.entries(labels).map(([key,label])=>{
+          const x=ints[key]||{}, st=x.state||'disabled';
+          return '<div class="item"><div class="row between"><div><h3>'+esc(label)+'</h3><p>'+esc(x.note||'設定なし')+'</p></div><span class="pill '+stateClass(st)+'">'+esc(stateText[st]||st)+'</span></div></div>';
+        }).join('')+
+      '</section>'+
+      '<section class="card section"><h2>システム情報</h2>'+
+        '<table><tbody>'+
+          '<tr><th>環境</th><td>Supabase Staging</td></tr>'+
+          '<tr><th>DB接続</th><td>'+(health?.ok?'OK':'ERROR')+'</td></tr>'+
+          '<tr><th>ユーザー</th><td>'+esc($('#userBadge').textContent||'—')+'</td></tr>'+
+          '<tr><th>権限</th><td>'+esc(roleLabel(role))+'</td></tr>'+
+          '<tr><th>会社</th><td>'+esc(bootData?.context?.company_name||'—')+'</td></tr>'+
+        '</tbody></table>'+
+        (!health?.ok&&health?.error?'<div class="notice error">'+esc(health.error)+'</div>':'')+
+      '</section>';
   }
 
   async function renderSearchPage(){
