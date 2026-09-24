@@ -16,26 +16,10 @@
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0}
     .kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}.kpi .label{font-size:12px;color:var(--muted);font-weight:800}.kpi .value{font-size:30px;font-weight:900;margin-top:6px}
     .section{margin-top:18px}.item{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px}.item h3{margin:0 0 5px;font-size:14px}.item p{margin:4px 0;font-size:13px;color:#475569}
-    .clickable{cursor:pointer}.clickable:hover{background:#f8fbff}.searchbar{display:flex;gap:8px;margin:14px 0}.searchbar input{flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font:inherit}
-    .message{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:#fafcff}.message.customer{background:#eff6ff}.message.support{background:#fff7ed}.message.internal{background:#f5f3ff}
-    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .app-shell{display:grid;grid-template-columns:240px minmax(0,1fr);gap:22px;align-items:start}
-    .sidebar{position:sticky;top:92px;background:var(--navy);color:#fff;border-radius:18px;padding:14px;min-height:calc(100vh - 116px);box-shadow:0 12px 30px rgba(7,22,47,.16)}
-    .sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#91a4c7;padding:8px 10px 10px}
-    .side-nav{display:grid;gap:4px}.side-nav button{width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:transparent;color:#d9e3f5;padding:11px 12px;border-radius:10px;font-weight:700}
-    .side-nav button:hover{background:rgba(255,255,255,.08)}.side-nav button.active{background:#fff;color:var(--navy)}
-    .side-icon{width:22px;text-align:center;font-size:16px}.content-pane{min-width:0}
-    .mobile-nav{display:none}
     table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f6;text-align:left;font-size:13px}th{color:#64748b;background:#fafcff}
     .pill{display:inline-flex;padding:5px 9px;border-radius:999px;background:#f8fafc;border:1px solid var(--line);font-size:12px;font-weight:800}.pill.good{background:#ecfdf5;color:#047857}.pill.bad{background:#fef2f2;color:#b91c1c}
     #toast{position:fixed;right:18px;bottom:18px;background:#0f172a;color:#fff;padding:11px 14px;border-radius:10px;display:none;z-index:30}
-    @media(max-width:780px){
-      .grid{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px 14px 84px}header{padding:0 14px}
-      .app-shell{display:block}.sidebar{display:none}
-      .mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:25;background:#fff;border-top:1px solid var(--line);padding:6px 6px max(6px,env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(15,23,42,.08)}
-      .mobile-nav button{background:transparent;color:#64748b;padding:7px 4px;border-radius:9px;font-size:11px;display:grid;gap:2px;place-items:center}
-      .mobile-nav button .side-icon{font-size:18px}.mobile-nav button.active{color:var(--blue);background:#eff6ff}
-    }
+    @media(max-width:780px){.grid{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px}header{padding:0 14px}}
   </style>
 </head>
 <body>
@@ -69,20 +53,11 @@
   </section>
 
   <section id="appView" class="hidden">
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="sidebar-title">MENU</div>
-        <nav id="sideNav" class="side-nav"></nav>
-      </aside>
-      <div class="content-pane">
-        <div class="row between">
-          <div><h1 id="pageTitle" style="margin-bottom:4px"></h1><div id="companyName" class="muted"></div></div>
-          <div id="integrations" class="row"></div>
-        </div>
-        <div id="home"></div>
-      </div>
+    <div class="row between">
+      <div><h1 id="pageTitle" style="margin-bottom:4px"></h1><div id="companyName" class="muted"></div></div>
+      <div id="integrations" class="row"></div>
     </div>
-    <nav id="mobileNav" class="mobile-nav"></nav>
+    <div id="home"></div>
   </section>
 </main>
 <div id="toast"></div>
@@ -104,405 +79,7 @@
   const notice = (id,msg,ok=false) => { const e=$(id); e.textContent=msg; e.className='notice '+(ok?'ok':'error'); e.classList.remove('hidden'); };
   const rpc = async (name,args={}) => { const {data,error}=await supabase.rpc(name,args); if(error) throw error; return data; };
 
-  let bootData=null, mfaState={}, currentSection='home';
-
-  const navByRole={
-    internal_admin:[
-      ['home','⌂','ホーム'],['customers','◎','顧客'],['quotes','▤','見積'],['orders','◫','受注'],
-      ['contracts','✎','契約'],['procurement','▦','発注'],['deliveries','▣','納品'],['support','●','対応'],
-      ['search','⌕','検索'],['settings','⚙','管理']
-    ],
-    internal_staff:[
-      ['home','⌂','ホーム'],['customers','◎','顧客'],['quotes','▤','見積'],['orders','◫','受注'],
-      ['contracts','✎','契約'],['procurement','▦','発注'],['deliveries','▣','納品'],['support','●','対応'],['search','⌕','検索']
-    ],
-    support_staff:[
-      ['home','⌂','ホーム'],['support','●','対応'],['customers','◎','顧客'],['search','⌕','検索']
-    ],
-    customer_user:[
-      ['home','⌂','ホーム'],['new-ticket','＋','問い合わせ'],['assets','▣','機器'],['contracts','✎','契約']
-    ]
-  };
-
-  function renderNavigation(){
-    const role=bootData?.context?.role;
-    const items=navByRole[role]||navByRole.customer_user;
-    const button=([id,icon,label])=>'<button type="button" data-section="'+id+'" class="'+(currentSection===id?'active':'')+'"><span class="side-icon">'+icon+'</span><span>'+label+'</span></button>';
-    $('#sideNav').innerHTML=items.map(button).join('');
-    const mobileItems=(role==='internal_admin'||role==='internal_staff')
-      ? [['home','⌂','ホーム'],['support','●','対応'],['quotes','▤','見積'],['customers','◎','顧客'],['search','⌕','その他']]
-      : role==='support_staff'
-        ? [['home','⌂','ホーム'],['support','●','対応'],['customers','◎','顧客'],['search','⌕','検索']]
-        : [['home','⌂','ホーム'],['new-ticket','＋','問い合わせ'],['assets','▣','機器'],['contracts','✎','契約']];
-    $('#mobileNav').innerHTML=mobileItems.map(button).join('');
-    document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>navigateSection(b.dataset.section));
-  }
-
-  async function navigateSection(section){
-    currentSection=section;
-    renderNavigation();
-    if(section==='home'){ await renderHome(); return; }
-    if(section==='support'){ await renderSupportPage(); return; }
-    if(section==='customers'){ await renderCustomersPage(); return; }
-    if(section==='search'){ await renderSearchPage(); return; }
-    if(section==='quotes'){ await renderQuotesPage(); return; }
-    if(section==='orders'){ await renderOrdersPage(); return; }
-    if(section==='contracts'){ await renderContractsPage(); return; }
-    if(section==='procurement'){ await renderPurchaseOrdersPage(); return; }
-    if(section==='deliveries'){ await renderDeliveriesPage(); return; }
-    if(section==='settings'){ await renderAdminPage(); return; }
-    if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
-      $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
-      bindCustomerTicketForm();
-      return;
-    }
-    if(section==='assets' && bootData?.context?.role==='customer_user'){
-      const h=await rpc('customer_portal_home');
-      $('#home').innerHTML='<section class="card section"><h2>登録機器</h2>'+renderAssets(h.assets||[])+'</section>';
-      return;
-    }
-    if(section==='contracts' && bootData?.context?.role==='customer_user'){
-      const h=await rpc('customer_portal_home');
-      $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
-      return;
-    }
-    const names={assets:'機器'};
-    $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
-  }
-
-  function renderAssets(rows){
-    if(!rows.length) return '<p class="muted">登録機器はありません。</p>';
-    return '<table><thead><tr><th>管理番号</th><th>型番</th><th>シリアル</th><th>状態</th></tr></thead><tbody>'+
-      rows.map(a=>'<tr><td>'+esc(a.asset_number||'—')+'</td><td>'+esc(a.model_name||'—')+'</td><td>'+esc(a.serial_number||'—')+'</td><td>'+esc(a.status||'—')+'</td></tr>').join('')+
-      '</tbody></table>';
-  }
-
-  function renderContracts(rows){
-    if(!rows.length) return '<p class="muted">契約はありません。</p>';
-    return '<table><thead><tr><th>契約番号</th><th>状態</th><th>開始</th><th>終了</th></tr></thead><tbody>'+
-      rows.map(x=>'<tr><td>'+esc(x.contract_number||'—')+'</td><td>'+esc(x.status||'—')+'</td><td>'+esc(x.start_date||'—')+'</td><td>'+esc(x.end_date||'—')+'</td></tr>').join('')+
-      '</tbody></table>';
-  }
-
-  async function renderSupportPage(){
-    const role=bootData?.context?.role;
-    if(role==='customer_user'){ await navigateSection('home'); return; }
-    const h=await rpc('support_home');
-    const rows=h.recent_tickets||[];
-    $('#home').innerHTML=
-      kpis([['対応中',h.kpis?.open_tickets],['本日新規',h.kpis?.created_today],['本日解決',h.kpis?.closed_today],['緊急',h.kpis?.urgent_open]])+
-      '<section class="card section"><div class="row between"><h2>対応一覧</h2><span class="muted">'+rows.length+'件</span></div>'+
-      (rows.length?'<table><thead><tr><th>番号</th><th>顧客</th><th>件名</th><th>状態</th><th>優先度</th></tr></thead><tbody>'+
-        rows.map(t=>'<tr class="clickable ticket-row" data-id="'+esc(t.id)+'"><td>'+esc(t.ticket_number||'—')+'</td><td>'+esc(t.customer_name||'')+'</td><td>'+esc(t.subject||'')+'</td><td>'+esc(t.status||'')+'</td><td>'+esc(t.priority||'')+'</td></tr>').join('')+
-        '</tbody></table>':'<p class="muted">対応案件はありません。</p>')+'</section>';
-    document.querySelectorAll('.ticket-row').forEach(row=>row.onclick=()=>openTicket(row.dataset.id));
-  }
-
-  async function openTicket(id){
-    const d=await rpc('support_ticket_workspace',{p_ticket_id:id});
-    const t=d.ticket||{}, role=bootData?.context?.role;
-    const messages=(d.messages||[]).map(m=>'<div class="message '+esc(m.visibility||'customer')+'"><div class="muted" style="font-size:11px">'+esc(m.visibility||'customer')+' / '+esc(new Date(m.created_at).toLocaleString('ja-JP'))+'</div><div>'+esc(m.body||'')+'</div></div>').join('');
-    const handoffs=(d.handoffs||[]).map(h=>'<div class="item"><h3>'+esc(h.state)+'</h3><p>理由: '+esc(h.reason||'')+'</p><p>次: '+esc(h.next_action||'')+'</p></div>').join('');
-    $('#home').innerHTML=
-      '<div class="row between"><div><button id="backSupport" class="ghost">← 対応一覧</button><h2>'+esc(t.ticket_number||'問い合わせ')+' '+esc(t.subject||'')+'</h2></div><span class="pill">'+esc(t.status||'')+'</span></div>'+
-      '<section class="card section"><h2>顧客・案件情報</h2><p><b>'+esc(d.customer?.name||'')+'</b></p><p class="muted">'+esc(t.description||'')+'</p></section>'+
-      '<section class="card section"><h2>メッセージ</h2>'+(messages||'<p class="muted">メッセージはありません。</p>')+
-      '<div class="field"><label>返信</label><textarea id="replyBody" rows="4"></textarea></div>'+
-      '<div class="field"><label>公開範囲</label><select id="replyVisibility" style="padding:10px;border:1px solid var(--line);border-radius:10px"><option value="customer">顧客公開</option><option value="support">サポート内</option>'+(role==='internal_admin'||role==='internal_staff'?'<option value="internal">自社内</option>':'')+'</select></div>'+
-      '<div class="actions"><button id="sendReply" class="primary">返信を記録</button>'+(t.status==='closed'?'<button id="reopenTicket" class="ghost">再開する</button>':'<button id="closeTicket" class="green">解決・完了</button>')+(role==='support_staff'?'<button id="handoffBtn" class="orange">自社へ引き継ぐ</button>':'')+'</div></section>'+
-      (role==='support_staff'?'<section id="handoffBox" class="card section hidden"><h2>自社へ引き継ぐ</h2><div class="field"><label>理由</label><textarea id="handoffReason" rows="3"></textarea></div><div class="field"><label>次に行うこと</label><textarea id="handoffNext" rows="3"></textarea></div><button id="submitHandoff" class="orange">引き継ぎを登録</button></section>':'')+
-      '<section class="card section"><h2>引き継ぎ履歴</h2>'+(handoffs||'<p class="muted">引き継ぎ履歴はありません。</p>')+'</section>';
-    $('#backSupport').onclick=renderSupportPage;
-    $('#sendReply').onclick=async()=>{const body=$('#replyBody').value.trim();if(!body)return;try{await rpc('post_ticket_message',{p_ticket_id:id,p_visibility:$('#replyVisibility').value,p_body:body});toast('返信を記録しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
-    const close=$('#closeTicket'); if(close) close.onclick=async()=>{try{await rpc('close_support_ticket',{p_ticket_id:id});toast('完了しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
-    const reopen=$('#reopenTicket'); if(reopen) reopen.onclick=async()=>{try{await rpc('reopen_support_ticket',{p_ticket_id:id});toast('再開しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
-    const hb=$('#handoffBtn'); if(hb) hb.onclick=()=>$('#handoffBox').classList.toggle('hidden');
-    const sh=$('#submitHandoff'); if(sh) sh.onclick=async()=>{try{await rpc('handoff_ticket_to_internal',{p_ticket_id:id,p_reason:$('#handoffReason').value.trim(),p_next_action:$('#handoffNext').value.trim()});toast('引き継ぎました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
-  }
-
-
-  function yen(v){
-    const n=Number(v||0);
-    return new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n);
-  }
-
-  async function renderQuotesPage(){
-    const rows=await rpc('search_global',{p_query:'',p_limit:50});
-    const quotes=rows.filter(x=>x.entity_type==='quote');
-    $('#home').innerHTML=
-      '<section class="card section"><div class="row between"><div><h2>見積</h2><p class="muted">Supabaseに登録されている見積を表示します。</p></div><span class="pill">'+quotes.length+'件</span></div>'+
-      (quotes.length
-        ? '<div class="list">'+quotes.map(q=>'<div class="item clickable quote-row" data-id="'+esc(q.entity_id)+'"><div class="row between"><div><h3>'+esc(q.reference||q.label||'見積')+'</h3><p>'+esc(q.label||'')+'</p></div><span class="pill">詳細</span></div></div>').join('')+'</div>'
-        : '<p class="muted">見積はまだ登録されていません。</p>')+
-      '</section>';
-    document.querySelectorAll('.quote-row').forEach(el=>el.onclick=()=>openQuote(el.dataset.id));
-  }
-
-  async function openQuote(id){
-    const d=await rpc('internal_quote_detail',{p_quote_id:id});
-    const q=d.quote||{}, items=d.items||[];
-    const cost=items.reduce((a,x)=>a+(Number(x.quantity)||0)*(Number(x.cost_price)||0),0);
-    const sales=Number(q.subtotal||0);
-    const gross=sales-cost;
-    const margin=sales>0?(gross/sales*100):0;
-
-    $('#home').innerHTML=
-      '<button id="backQuotes" class="ghost">← 見積一覧</button>'+
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">小計</div><div class="value">'+esc(yen(q.subtotal))+'</div></div>'+
-        '<div class="kpi"><div class="label">税額</div><div class="value">'+esc(yen(q.tax_amount))+'</div></div>'+
-        '<div class="kpi"><div class="label">合計</div><div class="value">'+esc(yen(q.total_amount))+'</div></div>'+
-        '<div class="kpi"><div class="label">粗利</div><div class="value">'+esc(yen(gross))+'</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>'+esc(q.quote_number||'見積')+'</h2><p class="muted">状態: '+esc(q.status||'—')+' / 有効期限: '+esc(q.valid_until||'—')+'</p></div><span class="pill">利益率 '+esc(margin.toFixed(1))+'%</span></div>'+
-      (q.internal_note?'<div class="notice">'+esc(q.internal_note)+'</div>':'')+
-      '</section>'+
-      '<section class="card section"><h2>明細</h2>'+
-      (items.length
-        ? '<table><thead><tr><th>内容</th><th>数量</th><th>売価</th><th>原価</th><th>売上</th><th>粗利</th></tr></thead><tbody>'+
-          items.map(i=>{
-            const qty=Number(i.quantity||0), up=Number(i.unit_price||0), cp=Number(i.cost_price||0);
-            return '<tr><td>'+esc(i.description||'')+'</td><td>'+esc(qty)+'</td><td>'+esc(yen(up))+'</td><td>'+esc(yen(cp))+'</td><td>'+esc(yen(qty*up))+'</td><td>'+esc(yen(qty*(up-cp)))+'</td></tr>';
-          }).join('')+
-          '</tbody></table>'
-        : '<p class="muted">明細はありません。</p>')+
-      '</section>';
-
-    $('#backQuotes').onclick=renderQuotesPage;
-  }
-
-
-  async function renderOrdersPage(){
-    const rows=await rpc('search_global',{p_query:'',p_limit:50});
-    const orders=rows.filter(x=>x.entity_type==='order');
-    $('#home').innerHTML=
-      '<section class="card section"><div class="row between"><div><h2>受注</h2><p class="muted">Supabaseに登録されている受注を表示します。</p></div><span class="pill">'+orders.length+'件</span></div>'+
-      (orders.length
-        ? '<div class="list">'+orders.map(o=>'<div class="item clickable order-row" data-id="'+esc(o.entity_id)+'"><div class="row between"><div><h3>'+esc(o.reference||o.label||'受注')+'</h3><p>'+esc(o.label||'')+'</p></div><span class="pill">詳細</span></div></div>').join('')+'</div>'
-        : '<p class="muted">受注はまだ登録されていません。</p>')+
-      '</section>';
-    document.querySelectorAll('.order-row').forEach(el=>el.onclick=()=>openOrder(el.dataset.id));
-  }
-
-  async function openOrder(id){
-    const d=await rpc('internal_order_detail',{p_order_id:id});
-    const o=d.order||{}, customer=d.customer||{}, quote=d.quote||null;
-    $('#home').innerHTML=
-      '<button id="backOrders" class="ghost">← 受注一覧</button>'+
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">受注金額</div><div class="value">'+esc(yen(o.total_amount))+'</div></div>'+
-        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(o.status||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">受注日</div><div class="value" style="font-size:18px">'+esc(o.ordered_at?new Date(o.ordered_at).toLocaleDateString('ja-JP'):'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">元見積</div><div class="value" style="font-size:18px">'+esc(quote?.quote_number||'—')+'</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>'+esc(o.order_number||'受注')+'</h2><p class="muted">'+esc(customer.name||'')+' / '+esc(customer.customer_code||'')+'</p></div>'+(customer.manual_hold?'<span class="pill bad">手動ホールド中</span>':'<span class="pill good">取引可</span>')+'</div>'+
-      '<p>電話: '+esc(customer.phone||'—')+'</p>'+
-      (o.internal_note?'<div class="notice">'+esc(o.internal_note)+'</div>':'')+
-      '</section>'+
-      (quote?'<section class="card section"><h2>元見積</h2><p>見積番号: '+esc(quote.quote_number||'—')+'</p><p>状態: '+esc(quote.status||'—')+'</p><p>見積合計: '+esc(yen(quote.total_amount))+'</p><button id="openSourceQuote" class="ghost">元見積を開く</button></section>':'');
-    $('#backOrders').onclick=renderOrdersPage;
-    const qbtn=$('#openSourceQuote'); if(qbtn) qbtn.onclick=()=>openQuote(quote.id);
-  }
-
-
-  async function renderContractsPage(){
-    const role=bootData?.context?.role;
-    if(role==='customer_user'){
-      const h=await rpc('customer_portal_home');
-      $('#home').innerHTML='<section class="card section"><div class="row between"><h2>契約</h2><span class="pill">'+(h.contracts||[]).length+'件</span></div>'+renderContracts(h.contracts||[])+'</section>';
-      return;
-    }
-    const rows=await rpc('search_global',{p_query:'',p_limit:50});
-    const contracts=rows.filter(x=>x.entity_type==='contract');
-    $('#home').innerHTML=
-      '<section class="card section"><div class="row between"><div><h2>契約</h2><p class="muted">Supabaseに登録されている契約を表示します。</p></div><span class="pill">'+contracts.length+'件</span></div>'+
-      (contracts.length
-        ? '<div class="list">'+contracts.map(x=>'<div class="item clickable contract-row" data-id="'+esc(x.entity_id)+'"><div class="row between"><div><h3>'+esc(x.reference||x.label||'契約')+'</h3><p>'+esc(x.label||'')+'</p></div><span class="pill">詳細</span></div></div>').join('')+'</div>'
-        : '<p class="muted">契約はまだ登録されていません。</p>')+
-      '</section>';
-    document.querySelectorAll('.contract-row').forEach(el=>el.onclick=()=>openContract(el.dataset.id));
-  }
-
-  async function openContract(id){
-    const d=await rpc('internal_contract_detail',{p_contract_id:id});
-    const co=d.contract||{}, customer=d.customer||{}, assets=d.assets||[];
-    $('#home').innerHTML=
-      '<button id="backContracts" class="ghost">← 契約一覧</button>'+
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(co.status||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">開始日</div><div class="value" style="font-size:18px">'+esc(co.start_date||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">終了日</div><div class="value" style="font-size:18px">'+esc(co.end_date||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">登録機器</div><div class="value">'+esc(assets.length)+'</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>'+esc(co.contract_number||'契約')+'</h2><p class="muted">'+esc(customer.name||'')+' / '+esc(customer.customer_code||'')+'</p></div>'+(customer.manual_hold?'<span class="pill bad">手動ホールド中</span>':'<span class="pill good">通常</span>')+'</div>'+
-      '<p>電話: '+esc(customer.phone||'—')+'</p>'+
-      (co.internal_note?'<div class="notice">'+esc(co.internal_note)+'</div>':'')+
-      '</section>'+
-      '<section class="card section"><h2>関連機器</h2>'+renderAssets(assets)+'</section>';
-    $('#backContracts').onclick=renderContractsPage;
-  }
-
-
-  async function renderPurchaseOrdersPage(){
-    const rows=await rpc('internal_purchase_orders');
-    $('#home').innerHTML=
-      '<section class="card section"><div class="row between"><div><h2>発注</h2><p class="muted">Supabaseに登録されている発注を表示します。</p></div><span class="pill">'+rows.length+'件</span></div>'+
-      (rows.length
-        ? '<div class="list">'+rows.map(po=>'<div class="item clickable po-row" data-id="'+esc(po.id)+'"><div class="row between"><div><h3>'+esc(po.purchase_order_number||'発注')+'</h3><p>'+esc(po.supplier_name||'仕入先未設定')+' / '+esc(po.customer_name||'')+'</p><p>'+esc(po.order_number||'')+'</p></div><div><span class="pill">'+esc(po.status||'')+'</span><div class="muted" style="margin-top:6px;text-align:right">'+esc(yen(po.total_cost))+'</div></div></div></div>').join('')+'</div>'
-        : '<p class="muted">発注はまだ登録されていません。</p>')+
-      '</section>';
-    document.querySelectorAll('.po-row').forEach(el=>el.onclick=()=>openPurchaseOrder(el.dataset.id));
-  }
-
-  async function openPurchaseOrder(id){
-    const d=await rpc('internal_purchase_order_detail',{p_purchase_order_id:id});
-    const po=d.purchase_order||{}, items=d.items||[];
-    $('#home').innerHTML=
-      '<button id="backPurchaseOrders" class="ghost">← 発注一覧</button>'+
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">発注原価</div><div class="value">'+esc(yen(po.total_cost))+'</div></div>'+
-        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(po.status||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">仕入先</div><div class="value" style="font-size:18px">'+esc(po.supplier_name||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">明細数</div><div class="value">'+esc(items.length)+'</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>'+esc(po.purchase_order_number||'発注')+'</h2><p class="muted">仕入先: '+esc(po.supplier_name||'—')+'</p></div><span class="pill">'+esc(po.status||'')+'</span></div>'+
-      (po.internal_note?'<div class="notice">'+esc(po.internal_note)+'</div>':'')+
-      '</section>'+
-      '<section class="card section"><h2>発注明細</h2>'+
-      (items.length
-        ? '<table><thead><tr><th>内容</th><th>数量</th><th>単価</th><th>金額</th></tr></thead><tbody>'+
-          items.map(i=>{const qty=Number(i.quantity||0),cost=Number(i.unit_cost||0);return '<tr><td>'+esc(i.description||'')+'</td><td>'+esc(qty)+'</td><td>'+esc(yen(cost))+'</td><td>'+esc(yen(qty*cost))+'</td></tr>';}).join('')+
-          '</tbody></table>'
-        : '<p class="muted">明細はありません。</p>')+
-      '</section>';
-    $('#backPurchaseOrders').onclick=renderPurchaseOrdersPage;
-  }
-
-
-  async function renderDeliveriesPage(){
-    const rows=await rpc('internal_deliveries');
-    $('#home').innerHTML=
-      '<section class="card section"><div class="row between"><div><h2>納品</h2><p class="muted">Supabaseに登録されている納品予定・実績を表示します。</p></div><span class="pill">'+rows.length+'件</span></div>'+
-      (rows.length
-        ? '<div class="list">'+rows.map(d=>'<div class="item clickable delivery-row" data-id="'+esc(d.id)+'"><div class="row between"><div><h3>'+esc(d.delivery_number||'納品')+'</h3><p>'+esc(d.customer_name||'')+' / '+esc(d.order_number||'')+'</p><p class="muted">予定: '+esc(d.scheduled_at?new Date(d.scheduled_at).toLocaleString('ja-JP'):'—')+'</p></div><div><span class="pill">'+esc(d.status||'')+'</span></div></div></div>').join('')+'</div>'
-        : '<p class="muted">納品データはまだありません。</p>')+
-      '</section>';
-    document.querySelectorAll('.delivery-row').forEach(el=>el.onclick=()=>openDelivery(el.dataset.id));
-  }
-
-  async function openDelivery(id){
-    const d=await rpc('internal_delivery_detail',{p_delivery_id:id});
-    const de=d.delivery||{}, customer=d.customer||{}, order=d.order||null;
-    $('#home').innerHTML=
-      '<button id="backDeliveries" class="ghost">← 納品一覧</button>'+
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(de.status||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">納品予定</div><div class="value" style="font-size:18px">'+esc(de.scheduled_at?new Date(de.scheduled_at).toLocaleString('ja-JP'):'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">納品完了</div><div class="value" style="font-size:18px">'+esc(de.delivered_at?new Date(de.delivered_at).toLocaleString('ja-JP'):'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">元受注</div><div class="value" style="font-size:18px">'+esc(order?.order_number||'—')+'</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>'+esc(de.delivery_number||'納品')+'</h2><p class="muted">'+esc(customer.name||'')+' / '+esc(customer.customer_code||'')+'</p></div>'+(customer.manual_hold?'<span class="pill bad">手動ホールド中</span>':'<span class="pill good">通常</span>')+'</div>'+
-      '<p>電話: '+esc(customer.phone||'—')+'</p>'+
-      (de.notes?'<div class="notice">'+esc(de.notes)+'</div>':'')+
-      (de.internal_note?'<div class="notice">'+esc(de.internal_note)+'</div>':'')+
-      '</section>'+
-      (order?'<section class="card section"><h2>元受注</h2><p>受注番号: '+esc(order.order_number||'—')+'</p><p>状態: '+esc(order.status||'—')+'</p><p>受注金額: '+esc(yen(order.total_amount))+'</p><button id="openDeliveryOrder" class="ghost">元受注を開く</button></section>':'');
-    $('#backDeliveries').onclick=renderDeliveriesPage;
-    const ob=$('#openDeliveryOrder'); if(ob) ob.onclick=()=>openOrder(order.id);
-  }
-
-
-  async function renderAdminPage(){
-    const role=bootData?.context?.role;
-    if(role!=='internal_admin'){
-      $('#home').innerHTML='<section class="card section"><h2>管理</h2><div class="notice error">この画面は自社管理者のみ利用できます。</div></section>';
-      return;
-    }
-
-    let health=null;
-    try{ health=await rpc('app_health'); }catch(e){ health={ok:false,error:e.message||String(e)}; }
-
-    const ints=bootData?.integrations||{};
-    const labels={callconnect:'CallConnect',ai:'AIアシスタント',teamviewer:'TeamViewer'};
-    const stateText={connected:'接続済み',degraded:'一部障害',manual:'手動運用',disabled:'未接続'};
-    const stateClass=s=>s==='connected'?'good':(s==='degraded'?'bad':'');
-
-    $('#home').innerHTML=
-      '<div class="grid">'+
-        '<div class="kpi"><div class="label">DBヘルス</div><div class="value" style="font-size:22px">'+(health?.ok?'正常':'要確認')+'</div></div>'+
-        '<div class="kpi"><div class="label">ロール</div><div class="value" style="font-size:18px">'+esc(roleLabel(role))+'</div></div>'+
-        '<div class="kpi"><div class="label">会社</div><div class="value" style="font-size:18px">'+esc(bootData?.context?.company_name||'—')+'</div></div>'+
-        '<div class="kpi"><div class="label">認証</div><div class="value" style="font-size:18px">MFA必須</div></div>'+
-      '</div>'+
-      '<section class="card section"><div class="row between"><div><h2>外部連携</h2><p class="muted">実際の接続状態のみ表示します。ここから接続済みへ変更はしません。</p></div></div>'+
-        Object.entries(labels).map(([key,label])=>{
-          const x=ints[key]||{}, st=x.state||'disabled';
-          return '<div class="item"><div class="row between"><div><h3>'+esc(label)+'</h3><p>'+esc(x.note||'設定なし')+'</p></div><span class="pill '+stateClass(st)+'">'+esc(stateText[st]||st)+'</span></div></div>';
-        }).join('')+
-      '</section>'+
-      '<section class="card section"><h2>システム情報</h2>'+
-        '<table><tbody>'+
-          '<tr><th>環境</th><td>Supabase Staging</td></tr>'+
-          '<tr><th>DB接続</th><td>'+(health?.ok?'OK':'ERROR')+'</td></tr>'+
-          '<tr><th>ユーザー</th><td>'+esc($('#userBadge').textContent||'—')+'</td></tr>'+
-          '<tr><th>権限</th><td>'+esc(roleLabel(role))+'</td></tr>'+
-          '<tr><th>会社</th><td>'+esc(bootData?.context?.company_name||'—')+'</td></tr>'+
-        '</tbody></table>'+
-        (!health?.ok&&health?.error?'<div class="notice error">'+esc(health.error)+'</div>':'')+
-      '</section>';
-  }
-
-  async function renderSearchPage(){
-    $('#home').innerHTML='<section class="card section"><h2>横断検索</h2><div class="searchbar"><input id="searchInput" placeholder="顧客名・電話・機器番号・契約番号・問い合わせ番号など"><button id="searchBtn" class="primary">検索</button></div><div id="searchResults"></div></section>';
-    $('#searchBtn').onclick=runGlobalSearch;
-    $('#searchInput').onkeydown=e=>{if(e.key==='Enter')runGlobalSearch();};
-  }
-
-  async function runGlobalSearch(){
-    const q=$('#searchInput').value.trim(), out=$('#searchResults');
-    if(!q){out.innerHTML='<p class="muted">検索語を入力してください。</p>';return;}
-    out.innerHTML='<p class="muted">検索中...</p>';
-    try{
-      const rows=await rpc('search_global',{p_query:q,p_limit:30});
-      out.innerHTML=rows.length?'<div class="list">'+rows.map(x=>'<div class="item clickable search-result" data-type="'+esc(x.entity_type)+'" data-id="'+esc(x.entity_id)+'" data-customer="'+esc(x.customer_id||'')+'"><h3>'+esc(x.label||'')+'</h3><p>'+esc(x.entity_type)+' / '+esc(x.reference||'')+'</p></div>').join('')+'</div>':'<p class="muted">該当なし</p>';
-      document.querySelectorAll('.search-result').forEach(el=>el.onclick=()=>openSearchResult(el.dataset.type,el.dataset.id,el.dataset.customer));
-    }catch(e){out.innerHTML='<div class="notice error">'+esc(e.message||String(e))+'</div>';}
-  }
-
-  async function openSearchResult(type,id,customerId){
-    if(type==='ticket'){await openTicket(id);return;}
-    if((bootData?.context?.role==='internal_admin'||bootData?.context?.role==='internal_staff') && customerId){await openCustomer(customerId);return;}
-    toast('この項目の詳細画面は移行中です');
-  }
-
-  async function renderCustomersPage(){
-    const rows=await rpc('search_global',{p_query:'',p_limit:50});
-    const customers=rows.filter(x=>x.entity_type==='customer');
-    $('#home').innerHTML='<section class="card section"><div class="row between"><h2>顧客</h2><span class="muted">'+customers.length+'件</span></div>'+
-      (customers.length?'<div class="list">'+customers.map(x=>'<div class="item clickable customer-row" data-id="'+esc(x.entity_id)+'"><h3>'+esc(x.label||'')+'</h3><p>'+esc(x.reference||'')+'</p></div>').join('')+'</div>':'<p class="muted">表示できる顧客はありません。</p>')+'</section>';
-    document.querySelectorAll('.customer-row').forEach(el=>el.onclick=()=>openCustomer(el.dataset.id));
-  }
-
-  async function openCustomer(id){
-    const role=bootData?.context?.role;
-    if(role!=='internal_admin'&&role!=='internal_staff'){toast('顧客詳細は自社ロールのみです');return;}
-    const d=await rpc('internal_customer_detail',{p_customer_id:id});
-    $('#home').innerHTML='<button id="backCustomers" class="ghost">← 顧客一覧</button><section class="card section"><h2>'+esc(d.name||'顧客')+'</h2><p>顧客コード: '+esc(d.customer_code||'—')+'</p><p>電話: '+esc(d.phone||'—')+'</p><p>状態: '+esc(d.status||'—')+'</p><p>手動ホールド: '+(d.manual_hold?'ON':'OFF')+'</p>'+(d.internal_note?'<div class="notice">'+esc(d.internal_note)+'</div>':'')+'</section>';
-    $('#backCustomers').onclick=renderCustomersPage;
-  }
-
-  function bindCustomerTicketForm(){
-    const form=$('#ticketForm');
-    if(!form) return;
-    form.onsubmit=async e=>{
-      e.preventDefault();
-      try{
-        await rpc('create_customer_ticket',{p_asset_id:null,p_contract_id:null,p_subject:$('#subject').value.trim(),p_description:$('#description').value.trim()||null});
-        notice('#ticketMsg','問い合わせを作成しました。',true);
-        form.reset();
-      }catch(err){notice('#ticketMsg',err.message||String(err));}
-    };
-  }
+  let bootData=null, mfaState={};
 
   function kpis(items){
     return '<div class="grid">'+items.map(([l,v])=>'<div class="kpi"><div class="label">'+esc(l)+'</div><div class="value">'+esc(v??0)+'</div></div>').join('')+'</div>';
@@ -563,7 +140,15 @@
         ['契約',(h.contracts||[]).length]
       ])+
       '<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="4"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
-    bindCustomerTicketForm();
+    $('#ticketForm').onsubmit=async e=>{
+      e.preventDefault();
+      try{
+        const t=await rpc('create_customer_ticket',{p_asset_id:null,p_contract_id:null,p_subject:$('#subject').value.trim(),p_description:$('#description').value.trim()||null});
+        notice('#ticketMsg','問い合わせを作成しました。',true);
+        $('#ticketForm').reset();
+        await renderHome();
+      }catch(err){notice('#ticketMsg',err.message||String(err));}
+    };
   }
 
   async function prepareMfa(){
@@ -604,9 +189,7 @@
     show('appView');
     $('#pageTitle').textContent=roleLabel(bootData.context?.role);
     $('#companyName').textContent=bootData.context?.company_name||'';
-    currentSection='home';
     integrations();
-    renderNavigation();
     await renderHome();
   }
 
