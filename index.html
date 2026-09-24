@@ -148,6 +148,7 @@
     if(section==='quotes'){ await renderQuotesPage(); return; }
     if(section==='orders'){ await renderOrdersPage(); return; }
     if(section==='contracts'){ await renderContractsPage(); return; }
+    if(section==='procurement'){ await renderPurchaseOrdersPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
@@ -163,7 +164,7 @@
       $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
       return;
     }
-    const names={procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
+    const names={deliveries:'納品',settings:'管理',assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
   }
 
@@ -337,6 +338,42 @@
       '</section>'+
       '<section class="card section"><h2>関連機器</h2>'+renderAssets(assets)+'</section>';
     $('#backContracts').onclick=renderContractsPage;
+  }
+
+
+  async function renderPurchaseOrdersPage(){
+    const rows=await rpc('internal_purchase_orders');
+    $('#home').innerHTML=
+      '<section class="card section"><div class="row between"><div><h2>発注</h2><p class="muted">Supabaseに登録されている発注を表示します。</p></div><span class="pill">'+rows.length+'件</span></div>'+
+      (rows.length
+        ? '<div class="list">'+rows.map(po=>'<div class="item clickable po-row" data-id="'+esc(po.id)+'"><div class="row between"><div><h3>'+esc(po.purchase_order_number||'発注')+'</h3><p>'+esc(po.supplier_name||'仕入先未設定')+' / '+esc(po.customer_name||'')+'</p><p>'+esc(po.order_number||'')+'</p></div><div><span class="pill">'+esc(po.status||'')+'</span><div class="muted" style="margin-top:6px;text-align:right">'+esc(yen(po.total_cost))+'</div></div></div></div>').join('')+'</div>'
+        : '<p class="muted">発注はまだ登録されていません。</p>')+
+      '</section>';
+    document.querySelectorAll('.po-row').forEach(el=>el.onclick=()=>openPurchaseOrder(el.dataset.id));
+  }
+
+  async function openPurchaseOrder(id){
+    const d=await rpc('internal_purchase_order_detail',{p_purchase_order_id:id});
+    const po=d.purchase_order||{}, items=d.items||[];
+    $('#home').innerHTML=
+      '<button id="backPurchaseOrders" class="ghost">← 発注一覧</button>'+
+      '<div class="grid">'+
+        '<div class="kpi"><div class="label">発注原価</div><div class="value">'+esc(yen(po.total_cost))+'</div></div>'+
+        '<div class="kpi"><div class="label">状態</div><div class="value" style="font-size:22px">'+esc(po.status||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">仕入先</div><div class="value" style="font-size:18px">'+esc(po.supplier_name||'—')+'</div></div>'+
+        '<div class="kpi"><div class="label">明細数</div><div class="value">'+esc(items.length)+'</div></div>'+
+      '</div>'+
+      '<section class="card section"><div class="row between"><div><h2>'+esc(po.purchase_order_number||'発注')+'</h2><p class="muted">仕入先: '+esc(po.supplier_name||'—')+'</p></div><span class="pill">'+esc(po.status||'')+'</span></div>'+
+      (po.internal_note?'<div class="notice">'+esc(po.internal_note)+'</div>':'')+
+      '</section>'+
+      '<section class="card section"><h2>発注明細</h2>'+
+      (items.length
+        ? '<table><thead><tr><th>内容</th><th>数量</th><th>単価</th><th>金額</th></tr></thead><tbody>'+
+          items.map(i=>{const qty=Number(i.quantity||0),cost=Number(i.unit_cost||0);return '<tr><td>'+esc(i.description||'')+'</td><td>'+esc(qty)+'</td><td>'+esc(yen(cost))+'</td><td>'+esc(yen(qty*cost))+'</td></tr>';}).join('')+
+          '</tbody></table>'
+        : '<p class="muted">明細はありません。</p>')+
+      '</section>';
+    $('#backPurchaseOrders').onclick=renderPurchaseOrdersPage;
   }
 
   async function renderSearchPage(){
