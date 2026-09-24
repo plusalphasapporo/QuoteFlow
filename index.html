@@ -145,6 +145,7 @@
     if(section==='support'){ await renderSupportPage(); return; }
     if(section==='customers'){ await renderCustomersPage(); return; }
     if(section==='search'){ await renderSearchPage(); return; }
+    if(section==='quotes'){ await renderQuotesPage(); return; }
     if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
       $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
       bindCustomerTicketForm();
@@ -160,7 +161,7 @@
       $('#home').innerHTML='<section class="card section"><h2>契約</h2>'+renderContracts(h.contracts||[])+'</section>';
       return;
     }
-    const names={quotes:'見積',orders:'受注',contracts:'契約',procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
+    const names={orders:'受注',contracts:'契約',procurement:'発注',deliveries:'納品',settings:'管理',assets:'機器'};
     $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
   }
 
@@ -212,6 +213,57 @@
     const reopen=$('#reopenTicket'); if(reopen) reopen.onclick=async()=>{try{await rpc('reopen_support_ticket',{p_ticket_id:id});toast('再開しました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
     const hb=$('#handoffBtn'); if(hb) hb.onclick=()=>$('#handoffBox').classList.toggle('hidden');
     const sh=$('#submitHandoff'); if(sh) sh.onclick=async()=>{try{await rpc('handoff_ticket_to_internal',{p_ticket_id:id,p_reason:$('#handoffReason').value.trim(),p_next_action:$('#handoffNext').value.trim()});toast('引き継ぎました');await openTicket(id);}catch(e){toast(e.message||String(e));}};
+  }
+
+
+  function yen(v){
+    const n=Number(v||0);
+    return new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n);
+  }
+
+  async function renderQuotesPage(){
+    const rows=await rpc('search_global',{p_query:'',p_limit:50});
+    const quotes=rows.filter(x=>x.entity_type==='quote');
+    $('#home').innerHTML=
+      '<section class="card section"><div class="row between"><div><h2>見積</h2><p class="muted">Supabaseに登録されている見積を表示します。</p></div><span class="pill">'+quotes.length+'件</span></div>'+
+      (quotes.length
+        ? '<div class="list">'+quotes.map(q=>'<div class="item clickable quote-row" data-id="'+esc(q.entity_id)+'"><div class="row between"><div><h3>'+esc(q.reference||q.label||'見積')+'</h3><p>'+esc(q.label||'')+'</p></div><span class="pill">詳細</span></div></div>').join('')+'</div>'
+        : '<p class="muted">見積はまだ登録されていません。</p>')+
+      '</section>';
+    document.querySelectorAll('.quote-row').forEach(el=>el.onclick=()=>openQuote(el.dataset.id));
+  }
+
+  async function openQuote(id){
+    const d=await rpc('internal_quote_detail',{p_quote_id:id});
+    const q=d.quote||{}, items=d.items||[];
+    const cost=items.reduce((a,x)=>a+(Number(x.quantity)||0)*(Number(x.cost_price)||0),0);
+    const sales=Number(q.subtotal||0);
+    const gross=sales-cost;
+    const margin=sales>0?(gross/sales*100):0;
+
+    $('#home').innerHTML=
+      '<button id="backQuotes" class="ghost">← 見積一覧</button>'+
+      '<div class="grid">'+
+        '<div class="kpi"><div class="label">小計</div><div class="value">'+esc(yen(q.subtotal))+'</div></div>'+
+        '<div class="kpi"><div class="label">税額</div><div class="value">'+esc(yen(q.tax_amount))+'</div></div>'+
+        '<div class="kpi"><div class="label">合計</div><div class="value">'+esc(yen(q.total_amount))+'</div></div>'+
+        '<div class="kpi"><div class="label">粗利</div><div class="value">'+esc(yen(gross))+'</div></div>'+
+      '</div>'+
+      '<section class="card section"><div class="row between"><div><h2>'+esc(q.quote_number||'見積')+'</h2><p class="muted">状態: '+esc(q.status||'—')+' / 有効期限: '+esc(q.valid_until||'—')+'</p></div><span class="pill">利益率 '+esc(margin.toFixed(1))+'%</span></div>'+
+      (q.internal_note?'<div class="notice">'+esc(q.internal_note)+'</div>':'')+
+      '</section>'+
+      '<section class="card section"><h2>明細</h2>'+
+      (items.length
+        ? '<table><thead><tr><th>内容</th><th>数量</th><th>売価</th><th>原価</th><th>売上</th><th>粗利</th></tr></thead><tbody>'+
+          items.map(i=>{
+            const qty=Number(i.quantity||0), up=Number(i.unit_price||0), cp=Number(i.cost_price||0);
+            return '<tr><td>'+esc(i.description||'')+'</td><td>'+esc(qty)+'</td><td>'+esc(yen(up))+'</td><td>'+esc(yen(cp))+'</td><td>'+esc(yen(qty*up))+'</td><td>'+esc(yen(qty*(up-cp)))+'</td></tr>';
+          }).join('')+
+          '</tbody></table>'
+        : '<p class="muted">明細はありません。</p>')+
+      '</section>';
+
+    $('#backQuotes').onclick=renderQuotesPage;
   }
 
   async function renderSearchPage(){
