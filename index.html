@@ -16,10 +16,23 @@
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0}
     .kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}.kpi .label{font-size:12px;color:var(--muted);font-weight:800}.kpi .value{font-size:30px;font-weight:900;margin-top:6px}
     .section{margin-top:18px}.item{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px}.item h3{margin:0 0 5px;font-size:14px}.item p{margin:4px 0;font-size:13px;color:#475569}
+    .app-shell{display:grid;grid-template-columns:240px minmax(0,1fr);gap:22px;align-items:start}
+    .sidebar{position:sticky;top:92px;background:var(--navy);color:#fff;border-radius:18px;padding:14px;min-height:calc(100vh - 116px);box-shadow:0 12px 30px rgba(7,22,47,.16)}
+    .sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#91a4c7;padding:8px 10px 10px}
+    .side-nav{display:grid;gap:4px}.side-nav button{width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:transparent;color:#d9e3f5;padding:11px 12px;border-radius:10px;font-weight:700}
+    .side-nav button:hover{background:rgba(255,255,255,.08)}.side-nav button.active{background:#fff;color:var(--navy)}
+    .side-icon{width:22px;text-align:center;font-size:16px}.content-pane{min-width:0}
+    .mobile-nav{display:none}
     table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f6;text-align:left;font-size:13px}th{color:#64748b;background:#fafcff}
     .pill{display:inline-flex;padding:5px 9px;border-radius:999px;background:#f8fafc;border:1px solid var(--line);font-size:12px;font-weight:800}.pill.good{background:#ecfdf5;color:#047857}.pill.bad{background:#fef2f2;color:#b91c1c}
     #toast{position:fixed;right:18px;bottom:18px;background:#0f172a;color:#fff;padding:11px 14px;border-radius:10px;display:none;z-index:30}
-    @media(max-width:780px){.grid{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px}header{padding:0 14px}}
+    @media(max-width:780px){
+      .grid{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px 14px 84px}header{padding:0 14px}
+      .app-shell{display:block}.sidebar{display:none}
+      .mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:25;background:#fff;border-top:1px solid var(--line);padding:6px 6px max(6px,env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(15,23,42,.08)}
+      .mobile-nav button{background:transparent;color:#64748b;padding:7px 4px;border-radius:9px;font-size:11px;display:grid;gap:2px;place-items:center}
+      .mobile-nav button .side-icon{font-size:18px}.mobile-nav button.active{color:var(--blue);background:#eff6ff}
+    }
   </style>
 </head>
 <body>
@@ -53,11 +66,20 @@
   </section>
 
   <section id="appView" class="hidden">
-    <div class="row between">
-      <div><h1 id="pageTitle" style="margin-bottom:4px"></h1><div id="companyName" class="muted"></div></div>
-      <div id="integrations" class="row"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-title">MENU</div>
+        <nav id="sideNav" class="side-nav"></nav>
+      </aside>
+      <div class="content-pane">
+        <div class="row between">
+          <div><h1 id="pageTitle" style="margin-bottom:4px"></h1><div id="companyName" class="muted"></div></div>
+          <div id="integrations" class="row"></div>
+        </div>
+        <div id="home"></div>
+      </div>
     </div>
-    <div id="home"></div>
+    <nav id="mobileNav" class="mobile-nav"></nav>
   </section>
 </main>
 <div id="toast"></div>
@@ -79,7 +101,66 @@
   const notice = (id,msg,ok=false) => { const e=$(id); e.textContent=msg; e.className='notice '+(ok?'ok':'error'); e.classList.remove('hidden'); };
   const rpc = async (name,args={}) => { const {data,error}=await supabase.rpc(name,args); if(error) throw error; return data; };
 
-  let bootData=null, mfaState={};
+  let bootData=null, mfaState={}, currentSection='home';
+
+  const navByRole={
+    internal_admin:[
+      ['home','⌂','ホーム'],['customers','◎','顧客'],['quotes','▤','見積'],['orders','◫','受注'],
+      ['contracts','✎','契約'],['procurement','▦','発注'],['deliveries','▣','納品'],['support','●','対応'],
+      ['search','⌕','検索'],['settings','⚙','管理']
+    ],
+    internal_staff:[
+      ['home','⌂','ホーム'],['customers','◎','顧客'],['quotes','▤','見積'],['orders','◫','受注'],
+      ['contracts','✎','契約'],['procurement','▦','発注'],['deliveries','▣','納品'],['support','●','対応'],['search','⌕','検索']
+    ],
+    support_staff:[
+      ['home','⌂','ホーム'],['support','●','対応'],['customers','◎','顧客'],['search','⌕','検索']
+    ],
+    customer_user:[
+      ['home','⌂','ホーム'],['new-ticket','＋','問い合わせ'],['assets','▣','機器'],['contracts','✎','契約']
+    ]
+  };
+
+  function renderNavigation(){
+    const role=bootData?.context?.role;
+    const items=navByRole[role]||navByRole.customer_user;
+    const button=([id,icon,label])=>'<button type="button" data-section="'+id+'" class="'+(currentSection===id?'active':'')+'"><span class="side-icon">'+icon+'</span><span>'+label+'</span></button>';
+    $('#sideNav').innerHTML=items.map(button).join('');
+    const mobileItems=(role==='internal_admin'||role==='internal_staff')
+      ? [['home','⌂','ホーム'],['support','●','対応'],['quotes','▤','見積'],['customers','◎','顧客'],['search','⌕','その他']]
+      : role==='support_staff'
+        ? [['home','⌂','ホーム'],['support','●','対応'],['customers','◎','顧客'],['search','⌕','検索']]
+        : [['home','⌂','ホーム'],['new-ticket','＋','問い合わせ'],['assets','▣','機器'],['contracts','✎','契約']];
+    $('#mobileNav').innerHTML=mobileItems.map(button).join('');
+    document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>navigateSection(b.dataset.section));
+  }
+
+  async function navigateSection(section){
+    currentSection=section;
+    renderNavigation();
+    if(section==='home'){ await renderHome(); return; }
+    if(section==='new-ticket' && bootData?.context?.role==='customer_user'){
+      const h=await rpc('customer_portal_home');
+      $('#home').innerHTML='<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="5"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
+      bindCustomerTicketForm();
+      return;
+    }
+    const names={customers:'顧客',quotes:'見積',orders:'受注',contracts:'契約',procurement:'発注',deliveries:'納品',support:'対応',search:'検索',settings:'管理',assets:'機器'};
+    $('#home').innerHTML='<section class="card section"><h2>'+esc(names[section]||section)+'</h2><p class="muted">この画面は現在、Supabase連携版へ移行中です。利用可能になった機能から順次表示します。</p></section>';
+  }
+
+  function bindCustomerTicketForm(){
+    const form=$('#ticketForm');
+    if(!form) return;
+    form.onsubmit=async e=>{
+      e.preventDefault();
+      try{
+        await rpc('create_customer_ticket',{p_asset_id:null,p_contract_id:null,p_subject:$('#subject').value.trim(),p_description:$('#description').value.trim()||null});
+        notice('#ticketMsg','問い合わせを作成しました。',true);
+        form.reset();
+      }catch(err){notice('#ticketMsg',err.message||String(err));}
+    };
+  }
 
   function kpis(items){
     return '<div class="grid">'+items.map(([l,v])=>'<div class="kpi"><div class="label">'+esc(l)+'</div><div class="value">'+esc(v??0)+'</div></div>').join('')+'</div>';
@@ -140,15 +221,7 @@
         ['契約',(h.contracts||[]).length]
       ])+
       '<section class="card section"><h2>新しく問い合わせる</h2><form id="ticketForm"><div class="field"><label>件名</label><input id="subject" required></div><div class="field"><label>内容</label><textarea id="description" rows="4"></textarea></div><button class="green" type="submit">送信する</button></form><div id="ticketMsg" class="notice hidden"></div></section>';
-    $('#ticketForm').onsubmit=async e=>{
-      e.preventDefault();
-      try{
-        const t=await rpc('create_customer_ticket',{p_asset_id:null,p_contract_id:null,p_subject:$('#subject').value.trim(),p_description:$('#description').value.trim()||null});
-        notice('#ticketMsg','問い合わせを作成しました。',true);
-        $('#ticketForm').reset();
-        await renderHome();
-      }catch(err){notice('#ticketMsg',err.message||String(err));}
-    };
+    bindCustomerTicketForm();
   }
 
   async function prepareMfa(){
@@ -189,7 +262,9 @@
     show('appView');
     $('#pageTitle').textContent=roleLabel(bootData.context?.role);
     $('#companyName').textContent=bootData.context?.company_name||'';
+    currentSection='home';
     integrations();
+    renderNavigation();
     await renderHome();
   }
 
